@@ -32,10 +32,10 @@ export interface EnrichmentResult {
   inferredContext: string;
   /** Keywords for searching integrations */
   searchQueries: string[];
-  /** Whether TinyFish would be useful (e.g., portal login) */
-  suggestTinyFish: boolean;
-  /** Specific TinyFish task suggestion if applicable */
-  tinyFishSuggestion?: string;
+  /** Whether web research would be useful */
+  suggestWebResearch: boolean;
+  /** Specific web research suggestion if applicable */
+  webResearchSuggestion?: string;
   /** Confidence in the enrichment (0-1) */
   confidence: number;
   /** What additional context would help */
@@ -113,7 +113,7 @@ Your job is to:
 1. Infer what this event likely is
 2. Identify what context would make an automated workflow most useful
 3. Generate search queries to find related content in Gmail/Slack
-4. Determine if live browser work (TinyFish) would be helpful
+4. Determine if web research would be helpful
 5. Provide an enriched context summary
 
 Return ONLY valid JSON:
@@ -122,8 +122,8 @@ Return ONLY valid JSON:
   "notes": "Suggested preparation notes or context that would help the user",
   "inferredContext": "What this event is about, what the user likely needs",
   "searchQueries": ["query1", "query2", "query3"],
-  "suggestTinyFish": boolean,
-  "tinyFishSuggestion": "Specific browser task if TinyFish is needed, or null",
+  "suggestWebResearch": boolean,
+  "webResearchSuggestion": "Specific research task if web research is needed, or null",
   "confidence": 0.0-1.0,
   "missingContext": ["list of things that would improve results"]
 }
@@ -131,7 +131,7 @@ Return ONLY valid JSON:
 Rules:
 - Keep descriptions factual and inferred, not invented
 - Search queries should target Gmail subjects, Slack messages, or calendar context
-- suggestTinyFish should be true only when browser login/navigation is truly needed (e.g., accessing a school portal, Canvas, Blackboard, or corporate intranet)
+- suggestWebResearch should be true when additional web-based context would meaningfully improve the output (e.g., finding course materials, research background)
 - If the title is very vague, say so in missingContext but still try your best
 - Do NOT hallucinate specific dates, professor names, or course numbers unless clearly implied
 - Confidence should reflect how much you can infer from just the title`;
@@ -199,7 +199,7 @@ export async function enrichEvent(
     return {
       inferredContext: `Event: ${record.title}`,
       searchQueries: [record.title],
-      suggestTinyFish: false,
+      suggestWebResearch: false,
       confidence: 0.3,
       missingContext: ["Could not parse enrichment response"],
       gatheredContext: { emails: [], slackMessages: [] },
@@ -256,8 +256,8 @@ export async function enrichEvent(
     notes: parsed.notes as string | undefined,
     inferredContext: (parsed.inferredContext as string) ?? `Event: ${record.title}`,
     searchQueries,
-    suggestTinyFish: (parsed.suggestTinyFish as boolean) ?? false,
-    tinyFishSuggestion: parsed.tinyFishSuggestion as string | undefined,
+    suggestWebResearch: (parsed.suggestWebResearch as boolean) ?? false,
+    webResearchSuggestion: parsed.webResearchSuggestion as string | undefined,
     confidence: (parsed.confidence as number) ?? 0.5,
     missingContext: (parsed.missingContext as string[]) ?? [],
     gatheredContext,

@@ -37,12 +37,12 @@ Return ONLY valid JSON matching this schema:
     "timeUntilEvent": "human-readable time until event"
   },
   "requiredInputs": ["list of inputs needed to execute"],
-  "requiresTinyFish": boolean — true if any step requires live browser automation,
+  "requiresWebResearch": boolean — true if any step requires live browser automation,
   "executionSteps": [
     {
       "order": 0,
       "description": "what this step does",
-      "type": one of "gather_context" | "browse_web" | "generate_content" | "create_artifact",
+      "type": one of "gather_context" | "web_research" | "generate_content" | "create_artifact",
       "input": { step-specific input data }
     }
   ],
@@ -51,7 +51,7 @@ Return ONLY valid JSON matching this schema:
 
 Rules:
 - Always include at least one "generate_content" step and one "create_artifact" step
-- Use "browse_web" only when live browser automation is truly needed (dynamic sites, forms, portals)
+- Use "web_research" only when live browser automation is truly needed (dynamic sites, forms, portals)
 - Use "gather_context" for fetching data from connected integrations (email, Slack)
 - Keep the plan concrete and specific — no vague steps like "do research"
 - Success criteria must be measurable
@@ -82,7 +82,7 @@ function buildGenericPlannerPrompt(
   if (record.location) parts.push(`Location: ${record.location}`);
   if (record.attendees?.length) parts.push(`Attendees: ${record.attendees.join(", ")}`);
   if (record.links?.length) parts.push(`Links: ${record.links.join(", ")}`);
-  if (classification.needsTinyFish) parts.push("Note: Live browser automation (TinyFish) is available for this task.");
+  if (classification.needsWebResearch) parts.push("Note: Live browser automation (web research) is available for this task.");
 
   parts.push(`\nConnected integrations:`);
   if (context.gmailConnected) parts.push("- Gmail (can search email threads)");
@@ -187,14 +187,14 @@ export function genericTaskPlanToSteps(
         }
         break;
       }
-      case "browse_web": {
+      case "web_research": {
         const urls = (execStep.input.urls as string[] | undefined)
           ?? plan.objective.targetSites
           ?? [];
         if (urls.length > 0) {
           steps.push({
             id: stepId,
-            type: "tinyfish_browse",
+            type: "web_research",
             description: execStep.description,
             input: {
               urls,
@@ -304,10 +304,10 @@ export function buildFallbackGenericSteps(
     });
   }
 
-  if (record.links?.length && classification.needsTinyFish) {
+  if (record.links?.length && classification.needsWebResearch) {
     steps.push({
       id: "fallback-browse",
-      type: "tinyfish_browse",
+      type: "web_research",
       description: "Browse linked pages for context",
       input: {
         urls: record.links,

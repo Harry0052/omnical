@@ -58,7 +58,7 @@ function makeClassification(overrides: Partial<ClassificationResult> = {}): Clas
     actionability: "actionable",
     urgency: "high",
     actionType: "slide_deck_generation",
-    needsTinyFish: false,
+    needsWebResearch: false,
     confidence: 0.93,
     reasoning: "Presentation requiring slide deck preparation.",
     missingInputs: [],
@@ -166,13 +166,13 @@ describe("aggregateSlideMaterials", () => {
     expect(materials.some((m) => m.type === "event_context")).toBe(true);
   });
 
-  it("aggregates TinyFish results", () => {
+  it("aggregates web research results", () => {
     const materials = aggregateSlideMaterials(makeRecord(), {
       "fetch-materials": {
         browseResults: [{ url: "https://docs.google.com", status: "completed", data: { content: "Q1 data" } }],
       },
     });
-    expect(materials.some((m) => m.type === "tinyfish")).toBe(true);
+    expect(materials.some((m) => m.type === "web_research")).toBe(true);
   });
 
   it("aggregates email context", () => {
@@ -197,14 +197,14 @@ describe("aggregateSlideMaterials", () => {
 // ── Step Building ────────────────────────────────────
 
 describe("buildSlideDeckSteps", () => {
-  it("includes TinyFish when needsTinyFish and links present", () => {
+  it("includes web research when needsWebResearch and links present", () => {
     const steps = buildSlideDeckSteps(makeRecord(), true, defaultContext);
-    expect(steps.some((s) => s.type === "tinyfish_browse")).toBe(true);
+    expect(steps.some((s) => s.type === "web_research")).toBe(true);
   });
 
-  it("omits TinyFish when needsTinyFish is false", () => {
+  it("omits web research when needsWebResearch is false", () => {
     const steps = buildSlideDeckSteps(makeRecord(), false, defaultContext);
-    expect(steps.some((s) => s.type === "tinyfish_browse")).toBe(false);
+    expect(steps.some((s) => s.type === "web_research")).toBe(false);
   });
 
   it("includes email fetch when gmail connected", () => {
@@ -405,7 +405,7 @@ describe("edge cases", () => {
     expect(fresh[0].id).toBe("art-new");
   });
 
-  it("TinyFish failure fallback — still produces artifact from other context", async () => {
+  it("web research failure fallback — still produces artifact from other context", async () => {
     const response = makeSlideDeckResponse({
       confidence: "low",
       sourceNotes: "External resources were inaccessible. Deck based on event description only.",

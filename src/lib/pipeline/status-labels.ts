@@ -32,15 +32,12 @@ export function getStageLabel(
 
 // ── Step Progress Labels ────────────────────────────
 
-export function getStepStartLabel(
-  stepType: ActionStepType,
-  isReal?: boolean,
-): string {
+export function getStepStartLabel(stepType: ActionStepType): string {
   switch (stepType) {
     case "claude_generate":
       return "Claude is generating content";
-    case "tinyfish_browse":
-      return isReal ? "TinyFish is working on the live web" : "Simulating web browsing";
+    case "web_research":
+      return "Researching context";
     case "integration_fetch":
       return "Gathering context from your apps";
     case "artifact_create":
@@ -52,8 +49,8 @@ export function getStepCompleteLabel(stepType: ActionStepType): string {
   switch (stepType) {
     case "claude_generate":
       return "Claude finished generating";
-    case "tinyfish_browse":
-      return "TinyFish returned results";
+    case "web_research":
+      return "Research complete";
     case "integration_fetch":
       return "Context gathered";
     case "artifact_create":
@@ -65,8 +62,8 @@ export function getStepFailLabel(stepType: ActionStepType): string {
   switch (stepType) {
     case "claude_generate":
       return "Claude encountered an error";
-    case "tinyfish_browse":
-      return "TinyFish encountered an error";
+    case "web_research":
+      return "Research encountered an error";
     case "integration_fetch":
       return "Failed to gather context";
     case "artifact_create":
@@ -80,8 +77,8 @@ export function getServiceForStep(stepType: ActionStepType): ServiceName {
   switch (stepType) {
     case "claude_generate":
       return "claude";
-    case "tinyfish_browse":
-      return "tinyfish";
+    case "web_research":
+      return "context_engine";
     case "integration_fetch":
       return "integration";
     case "artifact_create":

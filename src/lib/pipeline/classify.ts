@@ -69,7 +69,7 @@ function applyLowConfidenceFallback(result: ClassificationResult): Classificatio
       ...result,
       actionability: "not_actionable" as const,
       actionType: null,
-      needsTinyFish: false,
+      needsWebResearch: false,
       canRunNow: false,
       recommendedExecutionTime: null,
       reasoning: `[Low confidence: ${result.confidence}] ${result.reasoning}`,

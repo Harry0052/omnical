@@ -42,7 +42,7 @@ function makeClassificationJson(overrides: Partial<ClassificationResult> = {}): 
     actionability: "actionable",
     urgency: "medium",
     actionType: "meeting_research_brief",
-    needsTinyFish: false,
+    needsWebResearch: false,
     confidence: 0.92,
     reasoning: "Work meeting with multiple attendees requiring preparation.",
     missingInputs: [],
@@ -177,11 +177,11 @@ describe("meeting classification", () => {
 
     expect(result.eventType).toBe("meeting");
     expect(result.actionType).toBe("meeting_research_brief");
-    expect(result.needsTinyFish).toBe(false);
+    expect(result.needsWebResearch).toBe(false);
     expect(result.missingInputs).toEqual(["meeting agenda"]);
   });
 
-  it("flags needsTinyFish when meeting has external links", async () => {
+  it("flags needsWebResearch when meeting has external links", async () => {
     const record = makeRecord({
       id: "rec-meeting-tf",
       title: "Client onboarding review",
@@ -189,7 +189,7 @@ describe("meeting classification", () => {
     });
 
     const classification = makeClassificationJson({
-      needsTinyFish: true,
+      needsWebResearch: true,
       confidence: 0.85,
       reasoning: "Client portal link requires browser automation to gather context.",
     });
@@ -197,7 +197,7 @@ describe("meeting classification", () => {
     setClient(createMockClient(JSON.stringify(classification)));
     const result = await classifyEvent(record, { maxRetries: 0 });
 
-    expect(result.needsTinyFish).toBe(true);
+    expect(result.needsWebResearch).toBe(true);
   });
 });
 
@@ -344,7 +344,7 @@ describe("low confidence fallback", () => {
     expect(result.confidence).toBe(0.3);
     expect(result.actionability).toBe("not_actionable");
     expect(result.actionType).toBeNull();
-    expect(result.needsTinyFish).toBe(false);
+    expect(result.needsWebResearch).toBe(false);
     expect(result.canRunNow).toBe(false);
     expect(result.recommendedExecutionTime).toBeNull();
     expect(result.reasoning).toContain("[Low confidence: 0.3]");

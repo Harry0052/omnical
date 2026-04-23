@@ -47,7 +47,7 @@ export interface ClassificationResult {
   actionability: EventActionability;
   urgency: "low" | "medium" | "high" | "critical";
   actionType: WorkflowType | null;
-  needsTinyFish: boolean;
+  needsWebResearch: boolean;
   confidence: number;
   reasoning: string;
   missingInputs: string[];
@@ -89,11 +89,11 @@ export interface GenericTaskPlan {
     timeUntilEvent: string;
   };
   requiredInputs: string[];
-  requiresTinyFish: boolean;
+  requiresWebResearch: boolean;
   executionSteps: Array<{
     order: number;
     description: string;
-    type: "gather_context" | "browse_web" | "generate_content" | "create_artifact";
+    type: "gather_context" | "web_research" | "generate_content" | "create_artifact";
     input: Record<string, unknown>;
   }>;
   expectedOutputs: string[];
@@ -103,7 +103,7 @@ export interface GenericTaskPlan {
 
 export type ActionStepType =
   | "claude_generate"
-  | "tinyfish_browse"
+  | "web_research"
   | "integration_fetch"
   | "artifact_create";
 
@@ -132,7 +132,7 @@ export interface ActionPlan {
   steps: ActionStep[];
   estimatedDurationMs: number;
   requiresApproval: boolean;
-  requiresTinyFish: boolean;
+  requiresWebResearch: boolean;
   requiredInputs: string[];
   availableInputs: string[];
   missingInputs: string[];
@@ -154,7 +154,7 @@ export type PipelineStage =
   | "completed"
   | "failed";
 
-export type ServiceName = "claude" | "tinyfish" | "integration" | "synthesizer" | "system";
+export type ServiceName = "claude" | "context_engine" | "integration" | "synthesizer" | "system";
 
 export interface PipelineLogEntry {
   timestamp: string;
@@ -169,23 +169,8 @@ export interface PipelineLogEntry {
 
 export type ServiceMode = "real" | "mock" | "unavailable";
 
-/** Tracks the actual runtime usage of TinyFish within a specific run */
-export type TinyFishUsageStatus =
-  | "not_planned"    // No TinyFish step exists in the action plan
-  | "planned"        // TinyFish step exists but hasn't started yet
-  | "active"         // TinyFish step is currently running
-  | "completed"      // TinyFish step finished successfully
-  | "failed"         // TinyFish step failed
-  | "skipped";       // TinyFish step was skipped (e.g., dependency failed)
-
 export interface PipelineServiceStatus {
   claude: ServiceMode;
-  /** Whether TinyFish env vars are configured — does NOT mean it was used */
-  tinyfish: ServiceMode;
-  /** Actual TinyFish usage in this run — this is the source of truth for UI */
-  tinyfishUsage: TinyFishUsageStatus;
-  /** Why TinyFish was or wasn't used */
-  tinyfishUsageReason?: string;
 }
 
 export interface EnrichmentData {
@@ -194,8 +179,8 @@ export interface EnrichmentData {
     emails: Array<{ subject: string; from: string; date: string; snippet: string }>;
     slackMessages: Array<{ channel: string; user: string; text: string; timestamp: string }>;
   };
-  suggestTinyFish: boolean;
-  tinyFishSuggestion?: string;
+  suggestWebResearch: boolean;
+  webResearchSuggestion?: string;
   confidence: number;
   missingContext: string[];
 }
@@ -217,10 +202,6 @@ export interface PipelineRun {
   serviceMode?: PipelineServiceStatus;
   /** Enrichment data from Claude context gathering */
   enrichment?: EnrichmentData;
-  /** TinyFish live browser stream URL (set during active TinyFish runs) */
-  tinyFishStreamingUrl?: string | null;
-  /** TinyFish run ID from the SSE flow */
-  tinyFishRunId?: string | null;
 }
 
 // ── Artifact ─────────────────────────────────────────
@@ -258,34 +239,9 @@ export interface Artifact {
   createdAt: string;
 }
 
-// ── TinyFish ─────────────────────────────────────────
-
-export interface TinyFishTask {
-  id: string;
-  url: string;
-  instructions: string;
-  timeoutMs: number;
-}
-
-export type TinyFishStatus = "completed" | "failed" | "timeout";
-
-export interface TinyFishResult {
-  taskId: string;
-  status: TinyFishStatus;
-  extractedData?: Record<string, unknown>;
-  screenshots?: string[];
-  error?: string;
-  /** Live browser stream URL from TinyFish SSE (if available) */
-  streamingUrl?: string;
-  /** TinyFish run ID from SSE STARTED event */
-  runId?: string;
-  /** Progress messages received during SSE streaming */
-  progressMessages?: string[];
-}
-
 // ── Settings ─────────────────────────────────────────
 
-export type ApprovalMode = "auto" | "approve_all" | "approve_tinyfish_only";
+export type ApprovalMode = "auto" | "approve_all";
 
 export interface RetryPolicy {
   maxRetries: number;

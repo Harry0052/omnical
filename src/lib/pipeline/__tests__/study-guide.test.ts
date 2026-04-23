@@ -80,7 +80,7 @@ function makeClassification(overrides: Partial<ClassificationResult> = {}): Clas
     actionability: "actionable",
     urgency: "high",
     actionType: "study_guide_generation",
-    needsTinyFish: false,
+    needsWebResearch: false,
     confidence: 0.95,
     reasoning: "Midterm exam requiring study guide.",
     missingInputs: [],
@@ -237,7 +237,7 @@ describe("extractEventMaterials", () => {
 // ── Step Output Aggregation ──────────────────────────
 
 describe("aggregateStepOutputs", () => {
-  it("aggregates TinyFish browse results", () => {
+  it("aggregates web research browse results", () => {
     const outputs = {
       "fetch-materials": {
         browseResults: [
@@ -246,7 +246,7 @@ describe("aggregateStepOutputs", () => {
       },
     };
     const materials = aggregateStepOutputs(outputs);
-    expect(materials.some((m) => m.type === "tinyfish" && m.content.includes("Chapter 5"))).toBe(true);
+    expect(materials.some((m) => m.type === "web_research" && m.content.includes("Chapter 5"))).toBe(true);
   });
 
   it("aggregates email context", () => {
@@ -287,7 +287,7 @@ describe("buildStudyGuidePrompt", () => {
   it("includes event details and gathered materials", () => {
     const record = makeRecord();
     const materials: GatheredMaterial[] = [
-      { source: "TinyFish: https://bio101.edu", type: "tinyfish", content: "Chapter 5 content" },
+      { source: "web research: https://bio101.edu", type: "web_research", content: "Chapter 5 content" },
     ];
     const prompt = buildStudyGuidePrompt(record, materials, "exam", "biology");
 
@@ -323,26 +323,26 @@ describe("study guide workflow routing", () => {
     expect(wf).toBe("study_guide_generation");
   });
 
-  it("produces correct plan with TinyFish when links present", () => {
+  it("produces correct plan with web research when links present", () => {
     const plan = planActions(
       makeRecord(),
-      makeClassification({ needsTinyFish: true }),
+      makeClassification({ needsWebResearch: true }),
       defaultContext,
     );
     expect(plan.workflowType).toBe("study_guide_generation");
-    expect(plan.requiresTinyFish).toBe(true);
-    expect(plan.steps.some((s) => s.type === "tinyfish_browse")).toBe(true);
+    expect(plan.requiresWebResearch).toBe(true);
+    expect(plan.steps.some((s) => s.type === "web_research")).toBe(true);
   });
 
-  it("produces correct plan without TinyFish when no links", () => {
+  it("produces correct plan without web research when no links", () => {
     const plan = planActions(
       makeRecord({ links: undefined }),
-      makeClassification({ needsTinyFish: false }),
+      makeClassification({ needsWebResearch: false }),
       defaultContext,
     );
     expect(plan.workflowType).toBe("study_guide_generation");
-    expect(plan.requiresTinyFish).toBe(false);
-    expect(plan.steps.some((s) => s.type === "tinyfish_browse")).toBe(false);
+    expect(plan.requiresWebResearch).toBe(false);
+    expect(plan.steps.some((s) => s.type === "web_research")).toBe(false);
   });
 });
 
@@ -453,13 +453,13 @@ describe("edge cases", () => {
     expect(artifact.confidence).toBe("low");
   });
 
-  it("handles no links in event (no TinyFish steps)", () => {
+  it("handles no links in event (no web research steps)", () => {
     const plan = planActions(
       makeRecord({ links: undefined }),
-      makeClassification({ needsTinyFish: false }),
+      makeClassification({ needsWebResearch: false }),
       defaultContext,
     );
-    expect(plan.steps.some((s) => s.type === "tinyfish_browse")).toBe(false);
+    expect(plan.steps.some((s) => s.type === "web_research")).toBe(false);
     // Should still have generate + artifact steps
     expect(plan.steps.some((s) => s.type === "claude_generate")).toBe(true);
     expect(plan.steps.some((s) => s.type === "artifact_create")).toBe(true);
@@ -473,7 +473,7 @@ describe("edge cases", () => {
       .rejects.toThrow("Failed to parse study guide response");
   });
 
-  it("handles inaccessible materials (TinyFish failure)", async () => {
+  it("handles inaccessible materials (web research failure)", async () => {
     const record = makeRecord();
     const guideData = makeStudyGuideResponse({
       confidence: "medium",
@@ -481,7 +481,7 @@ describe("edge cases", () => {
     });
     setStudyGuideClient(createMockClient(JSON.stringify(guideData)));
 
-    // TinyFish returned an error for the browse step
+    // web research returned an error for the browse step
     const artifact = await synthesizeStudyGuide(record, "run-1", {
       "fetch-materials": {
         browseResults: [{ url: "https://bio101.edu", status: "failed", error: "403 Forbidden" }],

@@ -9,7 +9,7 @@ import type {
   ActionStep,
 } from "./types";
 import { pipelineStore } from "./index";
-import { createTinyFishClient, type ITinyFishClient } from "./tinyfish-client";
+import { executeWebResearch } from "./web-research";
 import { isConnected } from "../integrations";
 import {
   getStepStartLabel,
@@ -91,114 +91,50 @@ async function executeClaudeGenerate(
   return { generatedContent: content, model: response.model };
 }
 
-async function executeTinyFishBrowse(
+async function executeWebResearchStep(
   step: ActionStep,
-  tinyFishClient: ITinyFishClient,
   pipelineRunId: string,
 ): Promise<Record<string, unknown>> {
-  const input = step.input as { urls: string[]; instructions: string };
-  const results: Record<string, unknown>[] = [];
-  const isReal = tinyFishClient.isReal();
+  const input = step.input as { urls?: string[]; instructions: string; query?: string };
+  const taskId = `wr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-  for (const url of (input.urls ?? [])) {
-    const taskId = `tf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    let hostname: string;
-    try { hostname = new URL(url).hostname; } catch { hostname = url; }
+  pipelineStore.appendLog(pipelineRunId, {
+    timestamp: new Date().toISOString(),
+    stage: "executing",
+    message: `Starting web research: ${input.instructions.slice(0, 100)}`,
+    service: "context_engine",
+    label: "Researching context via Claude",
+    data: { taskId },
+  });
 
-    pipelineStore.appendLog(pipelineRunId, {
-      timestamp: new Date().toISOString(),
-      stage: "executing",
-      message: `TinyFish starting browser session for ${url}`,
-      service: "tinyfish",
-      label: isReal ? `TinyFish navigating to ${hostname}` : `Simulating navigation to ${hostname}`,
-      data: { taskId, url, isReal },
-    });
-
-    // Use SSE streaming — callbacks fire live during execution
-    const result = await tinyFishClient.runTask(
-      { id: taskId, url, instructions: input.instructions, timeoutMs: 60_000 },
-      // onProgress: log each SSE event as it arrives
-      (msg) => {
-        pipelineStore.appendLog(pipelineRunId, {
-          timestamp: new Date().toISOString(),
-          stage: "executing",
-          message: `TinyFish: ${msg}`,
-          service: "tinyfish",
-          label: msg,
-          data: { taskId, url },
-        });
-      },
-      // onStreamingUrl: persist immediately when STREAMING_URL event arrives
-      (streamUrl) => {
-        pipelineStore.update(pipelineRunId, {
-          tinyFishStreamingUrl: streamUrl,
-          tinyFishRunId: taskId,
-        });
-        pipelineStore.appendLog(pipelineRunId, {
-          timestamp: new Date().toISOString(),
-          stage: "executing",
-          message: `TinyFish live stream: ${streamUrl}`,
-          service: "tinyfish",
-          label: "Live browser preview available",
-          data: { streamingUrl: streamUrl, taskId },
-        });
-      },
-    );
-
-    // Also persist from result if not already set (fallback path)
-    if (result.streamingUrl) {
-      pipelineStore.update(pipelineRunId, {
-        tinyFishStreamingUrl: result.streamingUrl,
-        tinyFishRunId: result.runId ?? taskId,
+  const result = await executeWebResearch(
+    {
+      id: taskId,
+      query: input.query ?? input.instructions,
+      urls: input.urls,
+      instructions: input.instructions,
+    },
+    (msg) => {
+      pipelineStore.appendLog(pipelineRunId, {
+        timestamp: new Date().toISOString(),
+        stage: "executing",
+        message: msg,
+        service: "context_engine",
+        label: msg,
+        data: { taskId },
       });
-    }
+    },
+  );
 
-    results.push({
-      url,
-      taskId: result.runId ?? taskId,
-      status: result.status,
-      data: result.extractedData,
-      screenshots: result.screenshots ?? [],
-      streamingUrl: result.streamingUrl,
-      progressMessages: result.progressMessages ?? [],
-      error: result.error,
-    });
-
-    // Clear streaming URL after task completes
-    pipelineStore.update(pipelineRunId, { tinyFishStreamingUrl: null });
-
-    const screenshotInfo = result.screenshots?.length ? ` (${result.screenshots.length} screenshot(s))` : "";
-    pipelineStore.appendLog(pipelineRunId, {
-      timestamp: new Date().toISOString(),
-      stage: "executing",
-      message: `TinyFish ${result.status} for ${url}${screenshotInfo}`,
-      service: "tinyfish",
-      label: result.status === "completed"
-        ? `Finished browsing ${hostname}`
-        : `TinyFish ${result.status} on ${hostname}`,
-      data: {
-        taskId: result.runId ?? taskId,
-        url,
-        status: result.status,
-        hasScreenshots: !!result.screenshots?.length,
-        hasStreamingUrl: !!result.streamingUrl,
-      },
-    });
+  if (result.status === "failed") {
+    throw new Error(`Web research failed: ${result.error}`);
   }
 
-  // Check if any browse actually succeeded
-  const anySucceeded = results.some((r) => (r as Record<string, unknown>).status === "completed");
-  const allFailed = results.length > 0 && results.every((r) => (r as Record<string, unknown>).status !== "completed");
-  const errors = results
-    .filter((r) => (r as Record<string, unknown>).error)
-    .map((r) => String((r as Record<string, unknown>).error));
-
-  if (allFailed) {
-    const errorSummary = errors.length > 0 ? errors.join("; ") : "All browser tasks failed";
-    throw new Error(`TinyFish browsing failed: ${errorSummary}`);
-  }
-
-  return { browseResults: results, isReal, anySucceeded, partialFailure: !anySucceeded ? false : results.some((r) => (r as Record<string, unknown>).status !== "completed") };
+  return {
+    researchContext: result.synthesizedContext,
+    taskId: result.taskId,
+    status: result.status,
+  };
 }
 
 async function executeIntegrationFetch(
@@ -294,8 +230,6 @@ export async function executeActionPlan(
   record: CalendarEventRecord,
   plan: ActionPlan,
 ): Promise<Record<string, unknown>> {
-  const tinyFishClient = createTinyFishClient();
-  const isTinyFishReal = tinyFishClient.isReal();
   const enrichment = run.enrichment;
   const stepOutputs: Record<string, unknown> = {};
   const batches = getExecutionOrder(plan.steps);
@@ -313,31 +247,14 @@ export async function executeActionPlan(
       step.startedAt = new Date().toISOString();
 
       const service = getServiceForStep(step.type);
-      const isReal = step.type === "tinyfish_browse" ? isTinyFishReal : undefined;
-
-      // Track TinyFish usage when a browse step starts
-      if (step.type === "tinyfish_browse") {
-        const currentRun = pipelineStore.get(run.id);
-        if (currentRun?.serviceMode) {
-          pipelineStore.update(run.id, {
-            serviceMode: {
-              ...currentRun.serviceMode,
-              tinyfishUsage: "active",
-              tinyfishUsageReason: isTinyFishReal
-                ? `Real browser session started for step "${step.id}"`
-                : `Simulated browser session for step "${step.id}" (env vars not configured)`,
-            },
-          });
-        }
-      }
 
       pipelineStore.appendLog(run.id, {
         timestamp: new Date().toISOString(),
         stage: "executing",
         message: `Executing step: ${step.description}`,
-        data: { stepId: step.id, stepType: step.type, isReal },
+        data: { stepId: step.id, stepType: step.type },
         service,
-        label: getStepStartLabel(step.type, isReal),
+        label: getStepStartLabel(step.type),
       });
 
       try {
@@ -347,8 +264,8 @@ export async function executeActionPlan(
           case "claude_generate":
             output = await executeClaudeGenerate(step, record, stepOutputs, enrichment);
             break;
-          case "tinyfish_browse":
-            output = await executeTinyFishBrowse(step, tinyFishClient, run.id);
+          case "web_research":
+            output = await executeWebResearchStep(step, run.id);
             break;
           case "integration_fetch":
             output = await executeIntegrationFetch(step, record);
@@ -362,22 +279,6 @@ export async function executeActionPlan(
         step.completedAt = new Date().toISOString();
         stepOutputs[step.id] = output;
 
-        // Track TinyFish completion
-        if (step.type === "tinyfish_browse") {
-          const curRun = pipelineStore.get(run.id);
-          if (curRun?.serviceMode) {
-            pipelineStore.update(run.id, {
-              serviceMode: {
-                ...curRun.serviceMode,
-                tinyfishUsage: "completed",
-                tinyfishUsageReason: isTinyFishReal
-                  ? `Real browser work completed for step "${step.id}"`
-                  : `Simulated browser work completed for step "${step.id}"`,
-              },
-            });
-          }
-        }
-
         pipelineStore.appendLog(run.id, {
           timestamp: new Date().toISOString(),
           stage: "executing",
@@ -390,20 +291,6 @@ export async function executeActionPlan(
         step.status = "failed";
         step.error = err instanceof Error ? err.message : String(err);
         step.completedAt = new Date().toISOString();
-
-        // Track TinyFish failure
-        if (step.type === "tinyfish_browse") {
-          const curRun = pipelineStore.get(run.id);
-          if (curRun?.serviceMode) {
-            pipelineStore.update(run.id, {
-              serviceMode: {
-                ...curRun.serviceMode,
-                tinyfishUsage: "failed",
-                tinyfishUsageReason: `Browser step "${step.id}" failed: ${step.error}`,
-              },
-            });
-          }
-        }
 
         pipelineStore.appendLog(run.id, {
           timestamp: new Date().toISOString(),

@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calendar, Inbox, Puzzle, Settings, LogOut, Activity } from "lucide-react";
+import { Calendar, Inbox, Puzzle, Settings, LogOut, Activity, Brain, CheckSquare, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { label: "Calendar", href: "/app/calendar", icon: Calendar },
   { label: "Inbox", href: "/app/inbox", icon: Inbox },
+  { label: "Tasks", href: "/app/tasks", icon: CheckSquare },
+  { label: "Email Triage", href: "/app/triage", icon: Brain },
   { label: "Status", href: "/app/status", icon: Activity },
   { label: "Integrations", href: "/app/integrations", icon: Puzzle },
 ];

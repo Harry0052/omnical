@@ -40,7 +40,7 @@ function makeClassification(overrides: Partial<ClassificationResult> = {}): Clas
     actionability: "actionable",
     urgency: "medium",
     actionType: "meeting_research_brief",
-    needsTinyFish: false,
+    needsWebResearch: false,
     confidence: 0.9,
     reasoning: "Work meeting.",
     missingInputs: [],
@@ -171,12 +171,12 @@ describe("actionable event routing", () => {
   it("routes registration event correctly", () => {
     const plan = planActions(
       makeRecord({ title: "Conference RSVP", links: ["https://conf.example.com/register"] }),
-      makeClassification({ eventType: "admin", actionType: "registration_or_rsvp", needsTinyFish: true }),
+      makeClassification({ eventType: "admin", actionType: "registration_or_rsvp", needsWebResearch: true }),
       defaultContext,
     );
     expect(plan.workflowType).toBe("registration_or_rsvp");
     expect(plan.expectedOutputs).toContain("action_summary");
-    expect(plan.requiresTinyFish).toBe(true);
+    expect(plan.requiresWebResearch).toBe(true);
   });
 });
 
@@ -265,38 +265,38 @@ describe("plan structure and validation", () => {
   });
 });
 
-// ── TinyFish Steps ───────────────────────────────────
+// ── web research Steps ───────────────────────────────────
 
-describe("TinyFish step inclusion", () => {
-  it("includes tinyfish_browse steps when needsTinyFish and links present", () => {
+describe("web research step inclusion", () => {
+  it("includes web_research steps when needsWebResearch and links present", () => {
     const plan = planActions(
       makeRecord({ links: ["https://portal.edu/course"] }),
-      makeClassification({ needsTinyFish: true, actionType: "study_guide_generation" }),
+      makeClassification({ needsWebResearch: true, actionType: "study_guide_generation" }),
       defaultContext,
     );
-    const tfSteps = plan.steps.filter((s) => s.type === "tinyfish_browse");
+    const tfSteps = plan.steps.filter((s) => s.type === "web_research");
     expect(tfSteps.length).toBeGreaterThan(0);
-    expect(plan.requiresTinyFish).toBe(true);
+    expect(plan.requiresWebResearch).toBe(true);
   });
 
-  it("omits tinyfish_browse steps when needsTinyFish is false", () => {
+  it("omits web_research steps when needsWebResearch is false", () => {
     const plan = planActions(
       makeRecord({ links: ["https://portal.edu/course"] }),
-      makeClassification({ needsTinyFish: false, actionType: "study_guide_generation" }),
+      makeClassification({ needsWebResearch: false, actionType: "study_guide_generation" }),
       defaultContext,
     );
-    const tfSteps = plan.steps.filter((s) => s.type === "tinyfish_browse");
+    const tfSteps = plan.steps.filter((s) => s.type === "web_research");
     expect(tfSteps.length).toBe(0);
-    expect(plan.requiresTinyFish).toBe(false);
+    expect(plan.requiresWebResearch).toBe(false);
   });
 
-  it("omits tinyfish_browse steps when no links present even if needsTinyFish", () => {
+  it("omits web_research steps when no links present even if needsWebResearch", () => {
     const plan = planActions(
       makeRecord({ links: undefined }),
-      makeClassification({ needsTinyFish: true, actionType: "study_guide_generation" }),
+      makeClassification({ needsWebResearch: true, actionType: "study_guide_generation" }),
       defaultContext,
     );
-    const tfSteps = plan.steps.filter((s) => s.type === "tinyfish_browse");
+    const tfSteps = plan.steps.filter((s) => s.type === "web_research");
     expect(tfSteps.length).toBe(0);
   });
 });
@@ -357,60 +357,59 @@ describe("integration context awareness", () => {
 
 describe("approval mode", () => {
   it("auto mode: never requires approval", () => {
-    expect(shouldRequireApproval({ requiresTinyFish: false }, "auto")).toBe(false);
-    expect(shouldRequireApproval({ requiresTinyFish: true }, "auto")).toBe(false);
+    expect(shouldRequireApproval({ requiresWebResearch: false }, "auto")).toBe(false);
+    expect(shouldRequireApproval({ requiresWebResearch: true }, "auto")).toBe(false);
   });
 
   it("approve_all mode: always requires approval", () => {
-    expect(shouldRequireApproval({ requiresTinyFish: false }, "approve_all")).toBe(true);
-    expect(shouldRequireApproval({ requiresTinyFish: true }, "approve_all")).toBe(true);
+    expect(shouldRequireApproval({ requiresWebResearch: false }, "approve_all")).toBe(true);
+    expect(shouldRequireApproval({ requiresWebResearch: true }, "approve_all")).toBe(true);
   });
 
-  it("approve_tinyfish_only mode: requires approval only for TinyFish", () => {
-    expect(shouldRequireApproval({ requiresTinyFish: false }, "approve_tinyfish_only")).toBe(false);
-    expect(shouldRequireApproval({ requiresTinyFish: true }, "approve_tinyfish_only")).toBe(true);
+  it("approve_all mode: requires approval regardless of web research", () => {
+    expect(shouldRequireApproval({ requiresWebResearch: false }, "approve_all")).toBe(true);
+    expect(shouldRequireApproval({ requiresWebResearch: true }, "approve_all")).toBe(true);
   });
 
   it("plan.requiresApproval reflects approval mode (auto)", () => {
     const plan = planActions(
       makeRecord(),
-      makeClassification({ needsTinyFish: true }),
+      makeClassification({ needsWebResearch: true }),
       defaultContext,
       "auto",
     );
     expect(plan.requiresApproval).toBe(false);
   });
 
-  it("plan.requiresApproval reflects approval mode (approve_tinyfish_only) — only when TinyFish step is actually in plan", () => {
-    // With links + needsTinyFish: plan includes a TinyFish step, so approval is required
+  it("plan.requiresApproval reflects approval mode (approve_all) — always requires approval", () => {
+    // With links + needsWebResearch: approval is required
     const planWithLinks = planActions(
       makeRecord({ links: ["https://example.com/syllabus"] }),
-      makeClassification({ needsTinyFish: true }),
+      makeClassification({ needsWebResearch: true }),
       defaultContext,
-      "approve_tinyfish_only",
+      "approve_all",
     );
     expect(planWithLinks.requiresApproval).toBe(true);
-    expect(planWithLinks.requiresTinyFish).toBe(true);
+    expect(planWithLinks.requiresWebResearch).toBe(true);
 
-    // Without links + needsTinyFish: no TinyFish step in plan, so no approval needed
+    // Without links + needsWebResearch: approve_all still requires approval
     const planWithoutLinks = planActions(
       makeRecord(),
-      makeClassification({ needsTinyFish: true }),
+      makeClassification({ needsWebResearch: true }),
       defaultContext,
-      "approve_tinyfish_only",
+      "approve_all",
     );
-    expect(planWithoutLinks.requiresApproval).toBe(false);
-    expect(planWithoutLinks.requiresTinyFish).toBe(false);
+    expect(planWithoutLinks.requiresApproval).toBe(true);
   });
 
-  it("plan.requiresApproval is false when no TinyFish in approve_tinyfish_only", () => {
+  it("plan.requiresApproval is true in approve_all even without web research", () => {
     const plan = planActions(
       makeRecord(),
-      makeClassification({ needsTinyFish: false }),
+      makeClassification({ needsWebResearch: false }),
       defaultContext,
-      "approve_tinyfish_only",
+      "approve_all",
     );
-    expect(plan.requiresApproval).toBe(false);
+    expect(plan.requiresApproval).toBe(true);
   });
 });
 
@@ -420,7 +419,7 @@ describe("immediate execution mode", () => {
   it("plans that don't require approval can execute immediately", () => {
     const plan = planActions(
       makeRecord(),
-      makeClassification({ needsTinyFish: false }),
+      makeClassification({ needsWebResearch: false }),
       defaultContext,
       "auto",
     );
@@ -495,7 +494,7 @@ describe("unsupported workflow fallback", () => {
     for (const wf of workflowTypes) {
       const plan = planActions(
         makeRecord({ links: ["https://example.com"], location: "Somewhere" }),
-        makeClassification({ actionType: wf, needsTinyFish: true }),
+        makeClassification({ actionType: wf, needsWebResearch: true }),
         defaultContext,
       );
       expect(plan.workflowType).toBe(wf);

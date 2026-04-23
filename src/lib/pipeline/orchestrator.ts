@@ -48,9 +48,6 @@ function log(
 function detectServiceMode(): PipelineServiceStatus {
   return {
     claude: process.env.ANTHROPIC_API_KEY ? "real" : "unavailable",
-    tinyfish: (process.env.TINYFISH_API_URL && process.env.TINYFISH_API_KEY) ? "real" : "mock",
-    tinyfishUsage: "not_planned",
-    tinyfishUsageReason: "No action plan yet",
   };
 }
 
@@ -189,7 +186,7 @@ export async function runPipeline(
     };
     pipelineStore.create(run);
 
-    const modeDesc = `Claude: ${serviceMode.claude}, TinyFish: ${serviceMode.tinyfish}`;
+    const modeDesc = `Claude: ${serviceMode.claude}`;
     log(run.id, "ingested", `Pipeline started for event: ${record.title} [${modeDesc}]`, {
       service: "system",
       label: getStageLabel("ingested"),
@@ -242,8 +239,8 @@ async function executePipelineStages(
           enrichment: {
             inferredContext: enrichment.inferredContext,
             gatheredContext: enrichment.gatheredContext,
-            suggestTinyFish: enrichment.suggestTinyFish,
-            tinyFishSuggestion: enrichment.tinyFishSuggestion,
+            suggestWebResearch: enrichment.suggestWebResearch,
+            webResearchSuggestion: enrichment.webResearchSuggestion,
             confidence: enrichment.confidence,
             missingContext: enrichment.missingContext,
           },
@@ -256,7 +253,7 @@ async function executePipelineStages(
             confidence: enrichment.confidence,
             emailsFound: enrichment.gatheredContext.emails.length,
             slackFound: enrichment.gatheredContext.slackMessages.length,
-            suggestTinyFish: enrichment.suggestTinyFish,
+            suggestWebResearch: enrichment.suggestWebResearch,
           },
         });
       } catch (err) {
@@ -307,7 +304,7 @@ async function executePipelineStages(
       data: {
         confidence: classification.confidence,
         urgency: classification.urgency,
-        needsTinyFish: classification.needsTinyFish,
+        needsWebResearch: classification.needsWebResearch,
       },
     });
 
@@ -346,27 +343,11 @@ async function executePipelineStages(
     });
 
     const integrationContext = getIntegrationContext();
-    // Pass enrichment data so the planner can escalate to TinyFish when context is insufficient
+    // Pass enrichment data so the planner can use additional context
     const currentRunForEnrichment = pipelineStore.get(runId);
     const plan = await planActionsAsync(record, classification, integrationContext, settings.approvalMode, currentRunForEnrichment?.enrichment);
 
     pipelineStore.update(runId, { actionPlan: plan });
-
-    // ── Update TinyFish usage status based on actual plan contents ──
-    const hasTinyFishStep = plan.steps.some((s) => s.type === "tinyfish_browse");
-    const currentRunForTf = pipelineStore.get(runId);
-    if (currentRunForTf?.serviceMode) {
-      const tfConfigured = currentRunForTf.serviceMode.tinyfish === "real";
-      pipelineStore.update(runId, {
-        serviceMode: {
-          ...currentRunForTf.serviceMode,
-          tinyfishUsage: hasTinyFishStep ? "planned" : "not_planned",
-          tinyfishUsageReason: hasTinyFishStep
-            ? (tfConfigured ? "TinyFish step planned — will execute with real browser" : "TinyFish step planned — will run in simulated mode (env vars not set)")
-            : "No browser work needed for this workflow",
-        },
-      });
-    }
 
     updateStage(runId, "planned");
     log(runId, "planned", `Plan created: ${plan.workflowType} with ${plan.steps.length} steps`, {
@@ -375,20 +356,12 @@ async function executePipelineStages(
       data: {
         workflowType: plan.workflowType,
         stepCount: plan.steps.length,
-        requiresTinyFish: plan.requiresTinyFish,
+        requiresWebResearch: plan.requiresWebResearch,
         requiresApproval: plan.requiresApproval,
         missingInputs: plan.missingInputs,
         expectedOutputs: plan.expectedOutputs,
       },
     });
-
-    // Log TinyFish mock warning
-    if (plan.requiresTinyFish && !process.env.TINYFISH_API_URL) {
-      log(runId, "planned", "TinyFish env vars not set — browser tasks will be simulated", {
-        service: "tinyfish",
-        label: "TinyFish will run in simulated mode",
-      });
-    }
 
     // ── Stage 2b: Approval Gate ────────────────────
     if (plan.requiresApproval) {
@@ -397,7 +370,7 @@ async function executePipelineStages(
         service: "system",
         label: getStageLabel("awaiting_approval"),
         data: {
-          reason: plan.requiresTinyFish ? "TinyFish browser automation requires approval" : "User approval mode is set to approve_all",
+          reason: "User approval mode is set to approve_all",
         },
       });
       // Pipeline pauses here — the /approve endpoint will resume it
@@ -528,32 +501,19 @@ async function executeAndSynthesize(
   artifactStore.create(artifact);
 
   // ── Compute truthful completion status ──────────
-  // Check what actually succeeded vs failed in this run
   const completedRun = pipelineStore.get(runId)!;
-  const tfUsage = completedRun.serviceMode?.tinyfishUsage;
-  const tfFailed = tfUsage === "failed";
-  const tfWasPlanned = plan.steps.some((s) => s.type === "tinyfish_browse");
   const stepsWithFailures = plan.steps.filter((s) => s.status === "failed" || s.status === "skipped");
   const hasDocUrl = !!artifact.documentUrl;
   const docWasAttempted = isConnected("demo-user", "google-docs");
   const docFailed = docWasAttempted && !hasDocUrl;
 
-  // Determine final label based on what actually worked
   let completionLabel: string;
   if (stepsWithFailures.length === 0 && hasDocUrl) {
     completionLabel = "Your output is ready — Google Doc created";
   } else if (stepsWithFailures.length === 0 && !docWasAttempted) {
     completionLabel = getStageLabel("completed");
-  } else if (tfFailed && docFailed) {
-    completionLabel = "Artifact generated (Claude only) — browser actions and Google Doc creation failed";
-  } else if (tfFailed) {
-    completionLabel = hasDocUrl
-      ? "Artifact generated — browser actions failed, Google Doc created"
-      : "Artifact generated (Claude only) — browser actions failed";
   } else if (docFailed) {
-    completionLabel = tfWasPlanned
-      ? "Artifact generated with browser data — Google Doc creation failed"
-      : "Artifact generated — Google Doc creation failed";
+    completionLabel = "Artifact generated — Google Doc creation failed";
   } else {
     completionLabel = getStageLabel("completed");
   }
@@ -580,7 +540,6 @@ async function executeAndSynthesize(
       confidence: artifact.confidence,
       documentUrl: artifact.documentUrl,
       failedSteps: stepsWithFailures.map((s) => ({ id: s.id, type: s.type, error: s.error })),
-      tinyfishUsage: tfUsage,
       googleDocCreated: hasDocUrl,
     },
   });

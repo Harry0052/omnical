@@ -17,7 +17,7 @@ const WorkflowTypeSchema = z.enum([
   "slide_deck_generation", "registration_or_rsvp", "logistics_booking", "task_prep_bundle",
   "generic_agent_task",
 ]);
-const ActionStepTypeSchema = z.enum(["claude_generate", "tinyfish_browse", "integration_fetch", "artifact_create"]);
+const ActionStepTypeSchema = z.enum(["claude_generate", "web_research", "integration_fetch", "artifact_create"]);
 const ActionStepStatusSchema = z.enum(["pending", "running", "completed", "failed", "skipped"]);
 const PipelineStageSchema = z.enum([
   "ingested", "classifying", "classified", "planning", "planned",
@@ -28,7 +28,7 @@ const ArtifactTypeSchema = z.enum([
   "slide_content", "checklist", "action_summary", "research_brief",
   "generic_output",
 ]);
-const ApprovalModeSchema = z.enum(["auto", "approve_all", "approve_tinyfish_only"]);
+const ApprovalModeSchema = z.enum(["auto", "approve_all"]);
 
 // ── Classification Result ────────────────────────────
 
@@ -37,7 +37,7 @@ export const ClassificationResultSchema = z.object({
   actionability: EventActionabilitySchema,
   urgency: z.enum(["low", "medium", "high", "critical"]),
   actionType: WorkflowTypeSchema.nullable(),
-  needsTinyFish: z.boolean(),
+  needsWebResearch: z.boolean(),
   confidence: z.number().min(0).max(1),
   reasoning: z.string().min(1),
   missingInputs: z.array(z.string()),
@@ -65,7 +65,7 @@ export const ActionPlanSchema = z.object({
   steps: z.array(ActionStepSchema).min(1),
   estimatedDurationMs: z.number().positive(),
   requiresApproval: z.boolean(),
-  requiresTinyFish: z.boolean(),
+  requiresWebResearch: z.boolean(),
   requiredInputs: z.array(z.string()),
   availableInputs: z.array(z.string()),
   missingInputs: z.array(z.string()),
@@ -100,20 +100,19 @@ export const ArtifactSchema = z.object({
   createdAt: z.string(),
 });
 
-// ── TinyFish ─────────────────────────────────────────
+// ── Web Research ────────────────────────────────────
 
-export const TinyFishTaskSchema = z.object({
+export const WebResearchTaskSchema = z.object({
   id: z.string().min(1),
-  url: z.string().url(),
+  query: z.string().min(1),
+  urls: z.array(z.string()).optional(),
   instructions: z.string().min(1),
-  timeoutMs: z.number().positive().max(120_000),
 });
 
-export const TinyFishResultSchema = z.object({
+export const WebResearchResultSchema = z.object({
   taskId: z.string().min(1),
-  status: z.enum(["completed", "failed", "timeout"]),
-  extractedData: z.record(z.string(), z.unknown()).optional(),
-  screenshots: z.array(z.string()).optional(),
+  status: z.enum(["completed", "failed"]),
+  synthesizedContext: z.string().optional(),
   error: z.string().optional(),
 });
 
@@ -227,11 +226,11 @@ export const GenericTaskPlanSchema = z.object({
     timeUntilEvent: z.string(),
   }),
   requiredInputs: z.array(z.string()),
-  requiresTinyFish: z.boolean(),
+  requiresWebResearch: z.boolean(),
   executionSteps: z.array(z.object({
     order: z.number().int().min(0),
     description: z.string().min(1),
-    type: z.enum(["gather_context", "browse_web", "generate_content", "create_artifact"]),
+    type: z.enum(["gather_context", "web_research", "generate_content", "create_artifact"]),
     input: z.record(z.string(), z.unknown()),
   })).min(1),
   expectedOutputs: z.array(z.string()).min(1),

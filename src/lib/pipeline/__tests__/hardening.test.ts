@@ -50,7 +50,7 @@ function makeClassification(overrides: Partial<ClassificationResult> = {}): Clas
     actionability: "actionable",
     urgency: "medium",
     actionType: "meeting_research_brief",
-    needsTinyFish: false,
+    needsWebResearch: false,
     confidence: 0.9,
     reasoning: "Work meeting.",
     missingInputs: [],
@@ -196,42 +196,42 @@ describe("status transitions", () => {
 describe("approval mode behavior", () => {
   beforeEach(resetAllStores);
 
-  it("auto mode: plan.requiresApproval is false even with TinyFish", () => {
+  it("auto mode: plan.requiresApproval is false even with web research", () => {
     const plan = planActions(
       makeRecord({ links: ["https://example.com"] }),
-      makeClassification({ needsTinyFish: true }),
+      makeClassification({ needsWebResearch: true }),
       defaultContext,
       "auto",
     );
     expect(plan.requiresApproval).toBe(false);
   });
 
-  it("approve_all mode: plan.requiresApproval is true without TinyFish", () => {
+  it("approve_all mode: plan.requiresApproval is true without web research", () => {
     const plan = planActions(
       makeRecord(),
-      makeClassification({ needsTinyFish: false }),
+      makeClassification({ needsWebResearch: false }),
       defaultContext,
       "approve_all",
     );
     expect(plan.requiresApproval).toBe(true);
   });
 
-  it("approve_tinyfish_only: approval only when TinyFish needed", () => {
-    const withTF = planActions(
+  it("approve_all: approval always required", () => {
+    const withWR = planActions(
       makeRecord({ links: ["https://example.com"] }),
-      makeClassification({ needsTinyFish: true }),
+      makeClassification({ needsWebResearch: true }),
       defaultContext,
-      "approve_tinyfish_only",
+      "approve_all",
     );
-    expect(withTF.requiresApproval).toBe(true);
+    expect(withWR.requiresApproval).toBe(true);
 
-    const withoutTF = planActions(
+    const withoutWR = planActions(
       makeRecord(),
-      makeClassification({ needsTinyFish: false }),
+      makeClassification({ needsWebResearch: false }),
       defaultContext,
-      "approve_tinyfish_only",
+      "approve_all",
     );
-    expect(withoutTF.requiresApproval).toBe(false);
+    expect(withoutWR.requiresApproval).toBe(true);
   });
 
   it("resumePipelineFromApproval rejects non-awaiting runs", async () => {
@@ -485,7 +485,7 @@ describe("workflow routing consistency", () => {
     for (const wf of workflowTypes) {
       const plan = planActions(
         makeRecord({ links: ["https://example.com"], location: "Room 5" }),
-        makeClassification({ actionType: wf, confidence: 0.95, needsTinyFish: true }),
+        makeClassification({ actionType: wf, confidence: 0.95, needsWebResearch: true }),
         defaultContext,
       );
       // planActions calls validateOrThrow internally — if it returns, validation passed

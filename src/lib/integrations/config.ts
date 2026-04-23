@@ -25,8 +25,8 @@ export function getGoogleOAuthConfig(): OAuthConfig {
       // Calendar
       "https://www.googleapis.com/auth/calendar.readonly",
       "https://www.googleapis.com/auth/calendar.events.readonly",
-      // Gmail (read-only)
-      "https://www.googleapis.com/auth/gmail.readonly",
+      // Gmail (read + modify for triage/cleanup)
+      "https://www.googleapis.com/auth/gmail.modify",
       // Docs (create & edit)
       "https://www.googleapis.com/auth/documents",
       // Drive (file management)

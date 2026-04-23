@@ -81,7 +81,7 @@ function makeClassification(overrides: Partial<ClassificationResult> = {}): Clas
     actionability: "actionable",
     urgency: "medium",
     actionType: null,
-    needsTinyFish: false,
+    needsWebResearch: false,
     confidence: 0.7,
     reasoning: "Unusual event requiring custom preparation.",
     missingInputs: [],
@@ -117,7 +117,7 @@ function makeGenericTaskPlan(overrides: Partial<GenericTaskPlan> = {}): GenericT
       timeUntilEvent: "24 hours",
     },
     requiredInputs: ["title"],
-    requiresTinyFish: false,
+    requiresWebResearch: false,
     executionSteps: [
       { order: 0, description: "Gather context", type: "gather_context", input: {} },
       { order: 1, description: "Generate content", type: "generate_content", input: {} },
@@ -270,10 +270,10 @@ describe("non-actionable event", () => {
   });
 });
 
-// ── Test: TinyFish-required generic event ────────────
+// ── Test: web research-required generic event ────────────
 
-describe("TinyFish-required generic event", () => {
-  it("includes tinyfish_browse steps for generic workflow with links", () => {
+describe("web research-required generic event", () => {
+  it("includes web_research steps for generic workflow with links", () => {
     const plan = planActions(
       makeRecord({
         title: "Submit application form",
@@ -282,33 +282,33 @@ describe("TinyFish-required generic event", () => {
       makeClassification({
         eventType: "other",
         actionType: null,
-        needsTinyFish: true,
+        needsWebResearch: true,
         confidence: 0.8,
       }),
       defaultContext,
     );
     expect(plan.workflowType).toBe("generic_agent_task");
-    expect(plan.requiresTinyFish).toBe(true);
-    const tfSteps = plan.steps.filter((s) => s.type === "tinyfish_browse");
+    expect(plan.requiresWebResearch).toBe(true);
+    const tfSteps = plan.steps.filter((s) => s.type === "web_research");
     expect(tfSteps.length).toBeGreaterThan(0);
   });
 
-  it("fallback generic steps include browse when needsTinyFish and links exist", () => {
+  it("fallback generic steps include browse when needsWebResearch and links exist", () => {
     const steps = buildFallbackGenericSteps(
       makeRecord({ links: ["https://example.com/form"] }),
-      makeClassification({ needsTinyFish: true }),
+      makeClassification({ needsWebResearch: true }),
       noIntegrations,
     );
-    expect(steps.some((s) => s.type === "tinyfish_browse")).toBe(true);
+    expect(steps.some((s) => s.type === "web_research")).toBe(true);
   });
 
   it("fallback generic steps skip browse when no links", () => {
     const steps = buildFallbackGenericSteps(
       makeRecord({ links: undefined }),
-      makeClassification({ needsTinyFish: true }),
+      makeClassification({ needsWebResearch: true }),
       noIntegrations,
     );
-    expect(steps.some((s) => s.type === "tinyfish_browse")).toBe(false);
+    expect(steps.some((s) => s.type === "web_research")).toBe(false);
   });
 });
 
@@ -351,7 +351,7 @@ describe("genericTaskPlanToSteps", () => {
     expect(steps.some((s) => s.type === "artifact_create")).toBe(true);
   });
 
-  it("includes tinyfish_browse for browse_web steps with target URLs", () => {
+  it("includes web_research for web_research steps with target URLs", () => {
     const plan = makeGenericTaskPlan({
       objective: {
         summary: "Browse some sites",
@@ -360,13 +360,13 @@ describe("genericTaskPlanToSteps", () => {
         fallbackBehavior: "Use cached data",
       },
       executionSteps: [
-        { order: 0, description: "Browse target site", type: "browse_web", input: {} },
+        { order: 0, description: "Browse target site", type: "web_research", input: {} },
         { order: 1, description: "Generate", type: "generate_content", input: {} },
         { order: 2, description: "Create artifact", type: "create_artifact", input: {} },
       ],
     });
     const steps = genericTaskPlanToSteps(plan, defaultContext);
-    expect(steps.some((s) => s.type === "tinyfish_browse")).toBe(true);
+    expect(steps.some((s) => s.type === "web_research")).toBe(true);
   });
 
   it("ensures claude_generate step exists even if plan omits it", () => {
@@ -624,7 +624,7 @@ describe("template and generic workflow coexistence", () => {
       makeClassification({
         eventType: "other",
         actionType: "generic_agent_task",
-        needsTinyFish: true,
+        needsWebResearch: true,
         confidence: 0.8,
       }),
       defaultContext,

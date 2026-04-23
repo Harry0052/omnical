@@ -4,7 +4,7 @@
 //
 // Steps:
 //   1. Parse event for course/subject signals
-//   2. Gather materials (TinyFish if links, email if connected)
+//   2. Gather materials (web research if links, email if connected)
 //   3. Build study guide via Claude with gathered + event context
 //   4. Label each section as "gathered" or "inferred"
 //   5. Produce structured artifact
@@ -85,7 +85,7 @@ export function detectStudyEventKind(title: string, description?: string): Study
 
 export interface GatheredMaterial {
   source: string;
-  type: "tinyfish" | "email" | "slack" | "event_description" | "event_links";
+  type: "web_research" | "email" | "slack" | "event_description" | "event_links";
   content: string;
   url?: string;
 }
@@ -123,7 +123,7 @@ export function aggregateStepOutputs(
   for (const [stepId, output] of Object.entries(stepOutputs)) {
     const out = output as Record<string, unknown>;
 
-    // TinyFish results
+    // Web research results
     if (out.browseResults) {
       const results = out.browseResults as Array<{
         url: string;
@@ -133,8 +133,8 @@ export function aggregateStepOutputs(
       for (const r of results) {
         if (r.data) {
           materials.push({
-            source: `TinyFish: ${r.url}`,
-            type: "tinyfish",
+            source: `Web: ${r.url}`,
+            type: "web_research",
             content: typeof r.data.content === "string"
               ? r.data.content
               : JSON.stringify(r.data),

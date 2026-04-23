@@ -64,7 +64,7 @@ export function extractTopicSignals(record: CalendarEventRecord): string[] {
 
 export interface SlideMaterial {
   source: string;
-  type: "tinyfish" | "email" | "slack" | "event_context";
+  type: "web_research" | "email" | "slack" | "event_context";
   content: string;
   url?: string;
 }
@@ -96,7 +96,7 @@ export function aggregateSlideMaterials(
         if (r.data) {
           materials.push({
             source: `Web: ${r.url}`,
-            type: "tinyfish",
+            type: "web_research",
             content: typeof r.data.content === "string" ? r.data.content : JSON.stringify(r.data),
             url: r.url,
           });
@@ -164,15 +164,15 @@ export interface SlideDeckData {
 
 export function buildSlideDeckSteps(
   record: CalendarEventRecord,
-  needsTinyFish: boolean,
+  needsWebResearch: boolean,
   context: IntegrationContext,
 ): ActionStep[] {
   const steps: ActionStep[] = [];
 
-  if (record.links?.length && needsTinyFish) {
+  if (record.links?.length && needsWebResearch) {
     steps.push({
       id: "fetch-materials",
-      type: "tinyfish_browse",
+      type: "web_research",
       description: "Browse linked resources for presentation content",
       input: {
         urls: record.links,

@@ -15,7 +15,7 @@ You must return ONLY valid JSON matching this exact schema — no markdown, no e
   "actionability": one of "not_actionable" | "actionable",
   "urgency": one of "low" | "medium" | "high" | "critical",
   "actionType": one of "study_guide_generation" | "meeting_research_brief" | "zoom_note_capture" | "slide_deck_generation" | "registration_or_rsvp" | "logistics_booking" | "task_prep_bundle" | "generic_agent_task" | null (if not actionable),
-  "needsTinyFish": boolean — true ONLY when live browser automation is required (navigating external websites, filling forms, extracting dynamic web content, logging into portals),
+  "needsWebResearch": boolean — true when additional web research would improve the output (searching for context, finding related resources, gathering background information),
   "confidence": number 0.0–1.0 indicating your classification confidence,
   "reasoning": string — 1–3 sentences explaining your classification,
   "missingInputs": string[] — list of inputs that would improve the result (e.g. "syllabus URL", "meeting agenda", "attendee roles"). Empty array if nothing is missing,
@@ -51,8 +51,8 @@ WORKFLOW TYPE MAPPING:
 - interviews, multi-step admin tasks → "task_prep_bundle"
 - events that don't fit any template above but are still actionable → "generic_agent_task"
 
-TINYFISH RULES (live browser automation):
-- TRUE when: course materials are on a web portal, meeting context is on external sites, registration forms need filling, live data must be scraped
+WEB RESEARCH RULES:
+- TRUE when: additional context from web sources would improve the output (course materials, meeting background, resource gathering)
 - FALSE when: all needed context is in the event title/description/attendees, or can be synthesized from text alone
 
 URGENCY:

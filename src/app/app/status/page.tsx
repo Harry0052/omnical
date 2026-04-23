@@ -4,12 +4,12 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Activity, Brain, Globe, FileText, Sparkles, Clock, CheckCircle2,
   XCircle, Loader2, ChevronDown, ChevronUp, ArrowRight, AlertTriangle,
-  Zap, Image as ImageIcon, ExternalLink,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type {
-  PipelineRun, PipelineLogEntry, ServiceName, Artifact, TinyFishUsageStatus,
+  PipelineRun, PipelineLogEntry, ServiceName, Artifact,
 } from "@/lib/pipeline/types";
 
 // ── Types ───────────────────────────────────────────
@@ -95,7 +95,7 @@ function getStageIcon(stage: string) {
 function ServiceIcon({ service, className }: { service?: ServiceName; className?: string }) {
   switch (service) {
     case "claude": return <Brain className={cn("size-3 text-violet-500", className)} />;
-    case "tinyfish": return <Globe className={cn("size-3 text-blue-500", className)} />;
+    case "context_engine": return <Globe className={cn("size-3 text-blue-500", className)} />;
     case "integration": return <FileText className={cn("size-3 text-amber-500", className)} />;
     case "synthesizer": return <Sparkles className={cn("size-3 text-emerald-500", className)} />;
     default: return <Zap className={cn("size-3 text-[#9ca3af]", className)} />;
@@ -108,171 +108,6 @@ function ServiceBadge({ mode }: { mode: "real" | "mock" | "unavailable" }) {
   return <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 uppercase tracking-wider">Unavailable</span>;
 }
 
-function TinyFishUsageBadge({ usage }: { usage?: TinyFishUsageStatus }) {
-  switch (usage) {
-    case "active":
-      return <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 uppercase tracking-wider">Active</span>;
-    case "completed":
-      return <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 uppercase tracking-wider">Used</span>;
-    case "failed":
-      return <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 uppercase tracking-wider">Failed</span>;
-    case "planned":
-      return <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 uppercase tracking-wider">Planned</span>;
-    case "skipped":
-      return <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 uppercase tracking-wider">Skipped</span>;
-    case "not_planned":
-    default:
-      return <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500 uppercase tracking-wider">Not used</span>;
-  }
-}
-
-// ── TinyFish Activity Section ───────────────────────
-
-function TinyFishActivity({ run }: { run: EnrichedRun }) {
-  // Find TinyFish-related log entries
-  const tfLogs = run.log.filter((e) => e.service === "tinyfish");
-  const isTerminal = run.stage === "completed" || run.stage === "failed";
-  const usage = run.serviceMode?.tinyfishUsage;
-
-  // Show explicit "not used" message when run is done and TinyFish wasn't part of the plan
-  if (tfLogs.length === 0 && isTerminal) {
-    if (usage === "not_planned" || !usage) {
-      return (
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <Globe className="size-3.5 text-zinc-400" />
-            <span className="text-[11px] font-medium text-zinc-500">
-              No browser work was needed or performed
-            </span>
-          </div>
-          {run.serviceMode?.tinyfishUsageReason && (
-            <p className="text-[10px] text-zinc-400 ml-5">
-              {run.serviceMode.tinyfishUsageReason}
-            </p>
-          )}
-          <p className="text-[9px] text-zinc-400 ml-5 mt-1">
-            TinyFish config: {run.serviceMode?.tinyfish === "real" ? "configured (env vars set)" : "not configured"}
-          </p>
-        </div>
-      );
-    }
-    return null;
-  }
-
-  if (tfLogs.length === 0) return null;
-
-  // Find browse results from action plan steps
-  const tfStep = run.actionPlan?.steps.find((s) => s.type === "tinyfish_browse");
-  const tfOutput = tfStep?.output as { browseResults?: Array<{ url: string; taskId?: string; status: string; data?: Record<string, unknown>; screenshots?: string[]; streamingUrl?: string; progressMessages?: string[]; error?: string }>; isReal?: boolean } | undefined;
-  const isReal = run.serviceMode?.tinyfish === "real";
-  const isRunning = tfStep?.status === "running";
-  const streamingUrl = run.tinyFishStreamingUrl;
-
-  return (
-    <div className={cn(
-      "rounded-xl border p-4",
-      isRunning ? "border-blue-200 bg-blue-50/50" : "border-black/[0.06] bg-white",
-    )}>
-      <div className="flex items-center gap-2 mb-3">
-        <Globe className="size-3.5 text-blue-500" />
-        <span className="text-[11px] font-semibold text-[#1a1a1a] uppercase tracking-wider">
-          TinyFish Browser Activity
-        </span>
-        <TinyFishUsageBadge usage={run.serviceMode?.tinyfishUsage} />
-        {isRunning && (
-          <span className="relative flex size-1.5 ml-1">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-            <span className="relative inline-flex rounded-full size-1.5 bg-blue-500" />
-          </span>
-        )}
-      </div>
-
-      {/* Live PiP browser preview — only when real streaming URL is available */}
-      {streamingUrl && isReal && isRunning && (
-        <div className="mb-3 rounded-lg overflow-hidden border border-blue-300 bg-black">
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-900/80 text-[9px] text-blue-200">
-            <span className="relative flex size-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-              <span className="relative inline-flex rounded-full size-1.5 bg-red-500" />
-            </span>
-            Live browser session
-            {run.tinyFishRunId && <span className="ml-auto font-mono">{run.tinyFishRunId}</span>}
-          </div>
-          <iframe
-            src={streamingUrl}
-            className="w-full h-[240px] border-0"
-            sandbox="allow-same-origin allow-scripts"
-            title="TinyFish live browser session"
-          />
-        </div>
-      )}
-
-      {/* TinyFish task results */}
-      {tfOutput?.browseResults?.map((result, i) => (
-        <div key={i} className="mb-3 last:mb-0 rounded-lg border border-black/[0.04] bg-[#f9fafb] p-3">
-          <div className="flex items-center gap-2 mb-1.5">
-            {result.status === "completed" ? (
-              <CheckCircle2 className="size-3 text-emerald-500 shrink-0" />
-            ) : result.status === "failed" || result.status === "timeout" ? (
-              <XCircle className="size-3 text-red-500 shrink-0" />
-            ) : (
-              <Loader2 className="size-3 text-blue-500 animate-spin shrink-0" />
-            )}
-            <span className="text-[10px] font-mono text-blue-600 truncate">{result.url}</span>
-          </div>
-          {result.taskId && (
-            <p className="text-[9px] text-[#9ca3af] font-mono mb-1">Task: {result.taskId}</p>
-          )}
-          {result.error && (
-            <p className="text-[10px] text-red-500 mb-1">{result.error}</p>
-          )}
-          {/* Screenshots */}
-          {result.screenshots && result.screenshots.length > 0 && (
-            <div className="mt-2 space-y-1.5">
-              <div className="flex items-center gap-1 text-[9px] text-[#818380]">
-                <ImageIcon className="size-2.5" />
-                <span>{result.screenshots.length} screenshot(s) captured</span>
-              </div>
-              <div className="flex gap-2 overflow-x-auto">
-                {result.screenshots.map((src, si) => (
-                  <a key={si} href={src} target="_blank" rel="noopener noreferrer"
-                    className="shrink-0 rounded-md border border-black/[0.08] overflow-hidden hover:border-blue-300 transition-colors">
-                    <img src={src} alt={`Screenshot ${si + 1}`} className="h-20 w-auto object-cover" />
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-          {/* Extracted data preview */}
-          {result.data && !result.error && (
-            <details className="mt-1.5">
-              <summary className="text-[9px] text-[#9ca3af] cursor-pointer hover:text-[#818380]">
-                Show extracted data
-              </summary>
-              <pre className="text-[9px] text-[#818380] mt-1 p-2 rounded bg-white border border-black/[0.04] overflow-x-auto max-h-[120px] overflow-y-auto">
-                {JSON.stringify(result.data, null, 2)}
-              </pre>
-            </details>
-          )}
-        </div>
-      ))}
-
-      {/* TinyFish log entries */}
-      {!tfOutput?.browseResults && tfLogs.length > 0 && (
-        <div className="space-y-1">
-          {tfLogs.map((entry, i) => (
-            <div key={i} className="flex items-start gap-2 py-0.5">
-              <span className="text-[9px] font-mono text-[#9ca3af] shrink-0 w-12">
-                {new Date(entry.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-              </span>
-              <p className="text-[10px] text-[#818380]">{entry.label || entry.message}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── Run Log ─────────────────────────────────────────
 
@@ -365,9 +200,6 @@ function RunCard({ run }: { run: EnrichedRun }) {
                   <span className="flex items-center gap-1">
                     <Brain className="size-2.5" /> <ServiceBadge mode={run.serviceMode.claude} />
                   </span>
-                  <span className="flex items-center gap-1">
-                    <Globe className="size-2.5" /> <TinyFishUsageBadge usage={run.serviceMode.tinyfishUsage} />
-                  </span>
                 </>
               )}
               {run.actionPlan && (
@@ -394,9 +226,6 @@ function RunCard({ run }: { run: EnrichedRun }) {
               <p className="text-[10px] text-red-600">{run.error}</p>
             </div>
           )}
-
-          {/* TinyFish activity */}
-          <TinyFishActivity run={run} />
 
           {/* Artifacts */}
           {run.artifacts.length > 0 && (

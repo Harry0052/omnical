@@ -167,10 +167,10 @@ function PipelineSection() {
             onChange={(on) => updateSettings({ enabled: on })}
           />
           <Toggle
-            label="Require approval for browser tasks"
-            description="Ask before TinyFish navigates external websites"
-            defaultOn={settings.approvalMode === "approve_tinyfish_only" || settings.approvalMode === "approve_all"}
-            onChange={(on) => updateSettings({ approvalMode: on ? "approve_tinyfish_only" : "auto" })}
+            label="Require approval before executing"
+            description="Ask before running action plans on your events"
+            defaultOn={settings.approvalMode === "approve_all"}
+            onChange={(on) => updateSettings({ approvalMode: on ? "approve_all" : "auto" })}
           />
         </div>
       </div>

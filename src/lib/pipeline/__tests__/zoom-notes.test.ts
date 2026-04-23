@@ -69,7 +69,7 @@ function makeClassification(overrides: Partial<ClassificationResult> = {}): Clas
     actionability: "actionable",
     urgency: "medium",
     actionType: "zoom_note_capture",
-    needsTinyFish: false,
+    needsWebResearch: false,
     confidence: 0.9,
     reasoning: "Zoom lecture requiring note capture.",
     missingInputs: [],

@@ -10,14 +10,14 @@ import {
 import { cn } from "@/lib/utils";
 import { usePipelineRun } from "@/lib/pipeline/hooks";
 import { PipelineBadge } from "./pipeline-badge";
-import type { PipelineRun, ActionStep, Artifact, PipelineLogEntry, ServiceName, TinyFishUsageStatus } from "@/lib/pipeline/types";
+import type { PipelineRun, ActionStep, Artifact, PipelineLogEntry, ServiceName } from "@/lib/pipeline/types";
 
 // ── Service Icons ───────────────────────────────────
 
 function ServiceIcon({ service, className }: { service?: ServiceName; className?: string }) {
   switch (service) {
     case "claude": return <Brain className={cn("size-3 text-violet-500", className)} />;
-    case "tinyfish": return <Globe className={cn("size-3 text-blue-500", className)} />;
+    case "context_engine": return <Globe className={cn("size-3 text-blue-500", className)} />;
     case "integration": return <FileText className={cn("size-3 text-amber-500", className)} />;
     case "synthesizer": return <Sparkles className={cn("size-3 text-emerald-500", className)} />;
     default: return <Zap className={cn("size-3 text-[#9ca3af]", className)} />;
@@ -39,7 +39,7 @@ function StepIcon({ status }: { status: ActionStep["status"] }) {
 function StepTypeIcon({ type }: { type: ActionStep["type"] }) {
   switch (type) {
     case "claude_generate": return <Brain className="size-3 text-violet-500" />;
-    case "tinyfish_browse": return <Globe className="size-3 text-blue-500" />;
+    case "web_research": return <Brain className="size-3 text-blue-500" />;
     case "integration_fetch": return <FileText className="size-3 text-amber-500" />;
     case "artifact_create": return <Sparkles className="size-3 text-emerald-500" />;
   }
@@ -67,51 +67,6 @@ function ServiceModeBadge({ mode }: { mode: "real" | "mock" | "unavailable" }) {
       Unavailable
     </span>
   );
-}
-
-// ── TinyFish Usage Badge (truthful) ────────────────
-// Shows actual TinyFish usage — not just whether env vars are set
-
-function TinyFishUsageBadge({ usage }: { usage?: TinyFishUsageStatus }) {
-  switch (usage) {
-    case "active":
-      return (
-        <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 uppercase tracking-wider">
-          Active
-        </span>
-      );
-    case "completed":
-      return (
-        <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 uppercase tracking-wider">
-          Used
-        </span>
-      );
-    case "failed":
-      return (
-        <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 uppercase tracking-wider">
-          Failed
-        </span>
-      );
-    case "planned":
-      return (
-        <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 uppercase tracking-wider">
-          Planned
-        </span>
-      );
-    case "skipped":
-      return (
-        <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 uppercase tracking-wider">
-          Skipped
-        </span>
-      );
-    case "not_planned":
-    default:
-      return (
-        <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500 uppercase tracking-wider">
-          Not used
-        </span>
-      );
-  }
 }
 
 // ── Live Status Header ──────────────────────────────
@@ -146,9 +101,6 @@ function LiveStatusHeader({ run }: { run: PipelineRun }) {
           <>
             <span className="flex items-center gap-1">
               <Brain className="size-2.5" /> Claude: <ServiceModeBadge mode={run.serviceMode.claude} />
-            </span>
-            <span className="flex items-center gap-1">
-              <Globe className="size-2.5" /> TinyFish: <TinyFishUsageBadge usage={run.serviceMode.tinyfishUsage} />
             </span>
           </>
         )}
@@ -236,10 +188,6 @@ function ActionPlanPanel({ run }: { run: PipelineRun }) {
                 )}>
                   {step.description}
                 </p>
-                {/* Service mode badge — TinyFish shows actual usage, Claude shows config */}
-                {step.type === "tinyfish_browse" && serviceMode && (
-                  <TinyFishUsageBadge usage={serviceMode.tinyfishUsage} />
-                )}
                 {step.type === "claude_generate" && serviceMode && (
                   <ServiceModeBadge mode={serviceMode.claude} />
                 )}
@@ -251,67 +199,6 @@ function ActionPlanPanel({ run }: { run: PipelineRun }) {
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-// ── TinyFish Active Status Card ─────────────────────
-
-function TinyFishStatusCard({ run }: { run: PipelineRun }) {
-  // Only show when a TinyFish step is currently running
-  const activeTfStep = run.actionPlan?.steps.find(
-    (s) => s.type === "tinyfish_browse" && s.status === "running",
-  );
-  if (!activeTfStep) return null;
-
-  const urls = (activeTfStep.input as { urls?: string[] }).urls ?? [];
-  const isReal = run.serviceMode?.tinyfish === "real";
-  const elapsed = activeTfStep.startedAt ? getElapsed(activeTfStep.startedAt) : "0s";
-  const streamingUrl = run.tinyFishStreamingUrl;
-
-  return (
-    <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Globe className="size-3.5 text-blue-500" />
-        <span className="text-[11px] font-semibold text-blue-900">
-          {isReal ? "TinyFish is working on the live web" : "Simulating web browsing"}
-        </span>
-        <ServiceModeBadge mode={isReal ? "real" : "mock"} />
-      </div>
-
-      {/* Live PiP browser preview — only when real streaming URL is available */}
-      {streamingUrl && isReal && (
-        <div className="mb-3 rounded-lg overflow-hidden border border-blue-300 bg-black">
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-900/80 text-[9px] text-blue-200">
-            <span className="relative flex size-1.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-              <span className="relative inline-flex rounded-full size-1.5 bg-red-500" />
-            </span>
-            Live browser session
-          </div>
-          <iframe
-            src={streamingUrl}
-            className="w-full h-[200px] border-0"
-            sandbox="allow-same-origin allow-scripts"
-            title="TinyFish live browser session"
-          />
-        </div>
-      )}
-
-      {urls.length > 0 && (
-        <div className="space-y-1 mb-2">
-          {urls.map((url, i) => (
-            <div key={i} className="flex items-center gap-1.5">
-              <Loader2 className="size-2.5 text-blue-400 animate-spin shrink-0" />
-              <span className="text-[10px] text-blue-700 truncate font-mono">{url}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {run.tinyFishRunId && (
-        <p className="text-[9px] text-blue-400 font-mono mb-1">Run: {run.tinyFishRunId}</p>
-      )}
-      <span className="text-[10px] text-blue-500">{elapsed} elapsed</span>
     </div>
   );
 }
@@ -514,27 +401,6 @@ export function PipelineDrawer({
                 <div className="space-y-3">
                   {/* Live status */}
                   <LiveStatusHeader run={run} />
-
-                  {/* TinyFish active card — only when truly running */}
-                  <TinyFishStatusCard run={run} />
-
-                  {/* TinyFish not-used notice — shown when run is done and TinyFish wasn't used */}
-                  {(run.stage === "completed" || run.stage === "failed") &&
-                    run.serviceMode?.tinyfishUsage === "not_planned" && (
-                    <div className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-3">
-                      <div className="flex items-center gap-2">
-                        <Globe className="size-3 text-zinc-400" />
-                        <span className="text-[10px] text-zinc-500">
-                          No browser work was needed or performed
-                        </span>
-                      </div>
-                      {run.serviceMode.tinyfishUsageReason && (
-                        <p className="text-[9px] text-zinc-400 mt-1 ml-5">
-                          {run.serviceMode.tinyfishUsageReason}
-                        </p>
-                      )}
-                    </div>
-                  )}
 
                   <ClassificationPanel run={run} />
                   <ActionPlanPanel run={run} />

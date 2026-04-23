@@ -2,7 +2,7 @@
 // Deterministic template-based workflow routing.
 // Claude classifies; planner routes to templates.
 // Each workflow template declares its required/available inputs,
-// expected outputs, and whether TinyFish is needed.
+// expected outputs, and whether web research is needed.
 
 import type {
   CalendarEventRecord,
@@ -46,7 +46,7 @@ interface WorkflowSpec {
   requiredInputs: string[];
   expectedOutputs: string[];
   estimatedDurationMs: number;
-  buildSteps: (record: CalendarEventRecord, needsTinyFish: boolean, context: IntegrationContext, enrichment?: EnrichmentData) => ActionStep[];
+  buildSteps: (record: CalendarEventRecord, needsWebResearch: boolean, context: IntegrationContext, enrichment?: EnrichmentData) => ActionStep[];
 }
 
 // ── Template: Study Guide ────────────────────────────
@@ -55,37 +55,37 @@ const studyGuideSpec: WorkflowSpec = {
   requiredInputs: ["title", "startAt"],
   expectedOutputs: ["study_guide"],
   estimatedDurationMs: 30_000,
-  buildSteps(record, needsTinyFish, context, enrichment) {
+  buildSteps(record, needsWebResearch, context, enrichment) {
     const steps: ActionStep[] = [];
     const hasLinks = !!record.links?.length;
     const isMinimal = !record.description && !record.location && (!record.attendees || record.attendees.length === 0);
 
-    // ── Determine if TinyFish browser work is needed ──
-    // Three paths to TinyFish:
-    // 1. Event has links and classification says needsTinyFish
-    // 2. Enrichment explicitly suggests TinyFish (e.g., school portal access needed)
+    // ── Determine if web research browser work is needed ──
+    // Three paths to web research:
+    // 1. Event has links and classification says needsWebResearch
+    // 2. Enrichment explicitly suggests web research (e.g., school portal access needed)
     // 3. Title-only academic event with no connected context — escalate to browser
     //    to attempt course portal / Canvas / Blackboard scraping
-    const enrichmentSuggestsTinyFish = enrichment?.suggestTinyFish === true;
+    const enrichmentSuggestsWebResearch = enrichment?.suggestWebResearch === true;
     const contextIsInsufficient = isMinimal
       && (!enrichment || (enrichment.gatheredContext.emails.length === 0 && enrichment.gatheredContext.slackMessages.length === 0))
       && enrichment?.confidence !== undefined && enrichment.confidence < 0.7;
 
-    const shouldUseTinyFish = (hasLinks && needsTinyFish)
-      || enrichmentSuggestsTinyFish
+    const shouldUseWebResearch = (hasLinks && needsWebResearch)
+      || enrichmentSuggestsWebResearch
       || (isMinimal && contextIsInsufficient);
 
-    if (hasLinks && shouldUseTinyFish) {
+    if (hasLinks && shouldUseWebResearch) {
       // Path 1: Browse known links
-      steps.push(step("fetch-materials", "tinyfish_browse", "Browse course pages and extract study materials", {
+      steps.push(step("fetch-materials", "web_research", "Browse course pages and extract study materials", {
         urls: record.links,
         instructions: `Extract study materials, syllabus content, key topics, and any linked resources from these pages related to: ${record.title}`,
       }));
-    } else if (shouldUseTinyFish && !hasLinks) {
-      // Path 2/3: No links but TinyFish is needed — search for course materials via browser
-      const portalInstructions = enrichment?.tinyFishSuggestion
+    } else if (shouldUseWebResearch && !hasLinks) {
+      // Path 2/3: No links but web research is needed — search for course materials via browser
+      const portalInstructions = enrichment?.webResearchSuggestion
         ?? `Search for course materials, syllabus, and study resources for: ${record.title}. Try common academic portals (Canvas, Blackboard, university sites). Extract key topics, study guides, and exam preparation materials.`;
-      steps.push(step("browse-course-portal", "tinyfish_browse", "Search course portals for study materials via browser", {
+      steps.push(step("browse-course-portal", "web_research", "Search course portals for study materials via browser", {
         urls: ["https://www.google.com"],
         instructions: portalInstructions,
       }));
@@ -120,7 +120,7 @@ const meetingResearchSpec: WorkflowSpec = {
   requiredInputs: ["title", "startAt"],
   expectedOutputs: ["meeting_brief"],
   estimatedDurationMs: 20_000,
-  buildSteps(record, needsTinyFish, context) {
+  buildSteps(record, needsWebResearch, context) {
     const steps: ActionStep[] = [];
 
     if (context.gmailConnected) {
@@ -138,8 +138,8 @@ const meetingResearchSpec: WorkflowSpec = {
       }));
     }
 
-    if (record.links?.length && needsTinyFish) {
-      steps.push(step("browse-context", "tinyfish_browse", "Browse linked pages for meeting context", {
+    if (record.links?.length && needsWebResearch) {
+      steps.push(step("browse-context", "web_research", "Browse linked pages for meeting context", {
         urls: record.links,
         instructions: `Gather context for meeting: ${record.title}. Extract agendas, shared documents, relevant information about attendees or topics.`,
       }));
@@ -167,7 +167,7 @@ const zoomNoteSpec: WorkflowSpec = {
   requiredInputs: ["title", "startAt"],
   expectedOutputs: ["notes"],
   estimatedDurationMs: 15_000,
-  buildSteps(record, _needsTinyFish, context) {
+  buildSteps(record, _needsWebResearch, context) {
     const meetingLink = detectMeetingPlatform(
       record.title, record.description, record.location, record.links,
     );
@@ -181,8 +181,8 @@ const slideDeckSpec: WorkflowSpec = {
   requiredInputs: ["title", "startAt"],
   expectedOutputs: ["slide_content"],
   estimatedDurationMs: 25_000,
-  buildSteps(record, needsTinyFish, context) {
-    return buildSlideDeckSteps(record, needsTinyFish, context);
+  buildSteps(record, needsWebResearch, context) {
+    return buildSlideDeckSteps(record, needsWebResearch, context);
   },
 };
 
@@ -196,7 +196,7 @@ const registrationSpec: WorkflowSpec = {
     const steps: ActionStep[] = [];
 
     if (record.links?.length) {
-      steps.push(step("browse-registration", "tinyfish_browse", "Navigate registration page and gather form details", {
+      steps.push(step("browse-registration", "web_research", "Navigate registration page and gather form details", {
         urls: record.links,
         instructions: `Navigate to the registration/RSVP page for: ${record.title}. Extract form fields, deadlines, and requirements. If possible, complete the registration.`,
       }));
@@ -222,11 +222,11 @@ const logisticsSpec: WorkflowSpec = {
   requiredInputs: ["title", "startAt", "location"],
   expectedOutputs: ["checklist"],
   estimatedDurationMs: 15_000,
-  buildSteps(record, needsTinyFish) {
+  buildSteps(record, needsWebResearch) {
     const steps: ActionStep[] = [];
 
-    if (needsTinyFish && record.location) {
-      steps.push(step("research-logistics", "tinyfish_browse", "Research travel and logistics options", {
+    if (needsWebResearch && record.location) {
+      steps.push(step("research-logistics", "web_research", "Research travel and logistics options", {
         urls: record.links ?? [],
         instructions: `Research logistics for: ${record.title} at ${record.location}. Find directions, parking, nearby amenities, and travel options.`,
       }));
@@ -253,7 +253,7 @@ const taskPrepSpec: WorkflowSpec = {
   requiredInputs: ["title", "startAt"],
   expectedOutputs: ["research_brief"],
   estimatedDurationMs: 25_000,
-  buildSteps(record, needsTinyFish, context) {
+  buildSteps(record, needsWebResearch, context) {
     const steps: ActionStep[] = [];
 
     if (context.gmailConnected) {
@@ -271,8 +271,8 @@ const taskPrepSpec: WorkflowSpec = {
       }));
     }
 
-    if (record.links?.length && needsTinyFish) {
-      steps.push(step("browse-resources", "tinyfish_browse", "Browse linked resources for preparation", {
+    if (record.links?.length && needsWebResearch) {
+      steps.push(step("browse-resources", "web_research", "Browse linked resources for preparation", {
         urls: record.links,
         instructions: `Gather preparation materials for: ${record.title}. Extract key information, requirements, and context.`,
       }));
@@ -302,7 +302,7 @@ const genericAgentSpec: WorkflowSpec = {
   requiredInputs: ["title", "startAt"],
   expectedOutputs: ["generic_output"],
   estimatedDurationMs: 35_000,
-  buildSteps(record, needsTinyFish, context) {
+  buildSteps(record, needsWebResearch, context) {
     // This is a placeholder — the real steps are built dynamically
     // by planActions() calling generateGenericTaskPlan().
     // These fallback steps are used if that call fails.
@@ -313,7 +313,7 @@ const genericAgentSpec: WorkflowSpec = {
         actionability: "actionable",
         urgency: "medium",
         actionType: "generic_agent_task",
-        needsTinyFish,
+        needsWebResearch,
         confidence: 0.5,
         reasoning: "Generic fallback",
         missingInputs: [],
@@ -386,7 +386,7 @@ function analyzeInputs(
 // ── Approval Logic ───────────────────────────────────
 
 export function shouldRequireApproval(
-  plan: { requiresTinyFish: boolean },
+  plan: { requiresWebResearch: boolean },
   approvalMode: ApprovalMode,
 ): boolean {
   switch (approvalMode) {
@@ -394,8 +394,6 @@ export function shouldRequireApproval(
       return false;
     case "approve_all":
       return true;
-    case "approve_tinyfish_only":
-      return plan.requiresTinyFish;
   }
 }
 
@@ -452,8 +450,8 @@ export function planActions(
   const workflowType = resolveWorkflowType(classification);
   const spec = WORKFLOW_REGISTRY[workflowType];
 
-  // Build steps from template — pass enrichment so templates can escalate to TinyFish
-  const steps = spec.buildSteps(record, classification.needsTinyFish, context, enrichment);
+  // Build steps from template — pass enrichment so templates can escalate to web research
+  const steps = spec.buildSteps(record, classification.needsWebResearch, context, enrichment);
 
   // Analyze inputs
   const { available, missing } = analyzeInputs(record, spec);
@@ -461,18 +459,18 @@ export function planActions(
   // Also include missing inputs from classification
   const allMissing = [...new Set([...missing, ...classification.missingInputs])];
 
-  // Determine requiresTinyFish from actual plan steps, not just classification
-  const planActuallyRequiresTinyFish = steps.some((s) => s.type === "tinyfish_browse");
+  // Determine requiresWebResearch from actual plan steps, not just classification
+  const planActuallyRequiresWebResearch = steps.some((s) => s.type === "web_research");
 
   const plan: ActionPlan = {
     workflowType,
     steps,
     estimatedDurationMs: spec.estimatedDurationMs,
     requiresApproval: shouldRequireApproval(
-      { requiresTinyFish: planActuallyRequiresTinyFish },
+      { requiresWebResearch: planActuallyRequiresWebResearch },
       approvalMode,
     ),
-    requiresTinyFish: planActuallyRequiresTinyFish,
+    requiresWebResearch: planActuallyRequiresWebResearch,
     requiredInputs: spec.requiredInputs,
     availableInputs: available,
     missingInputs: allMissing,
@@ -514,17 +512,17 @@ export async function planActionsAsync(
   const { available, missing } = analyzeInputs(record, spec);
   const allMissing = [...new Set([...missing, ...classification.missingInputs])];
 
-  const planActuallyRequiresTinyFish = steps.some((s) => s.type === "tinyfish_browse");
+  const planActuallyRequiresWebResearch = steps.some((s) => s.type === "web_research");
 
   const plan: ActionPlan = {
     workflowType: "generic_agent_task",
     steps,
     estimatedDurationMs: spec.estimatedDurationMs,
     requiresApproval: shouldRequireApproval(
-      { requiresTinyFish: planActuallyRequiresTinyFish },
+      { requiresWebResearch: planActuallyRequiresWebResearch },
       approvalMode,
     ),
-    requiresTinyFish: planActuallyRequiresTinyFish,
+    requiresWebResearch: planActuallyRequiresWebResearch,
     requiredInputs: spec.requiredInputs,
     availableInputs: available,
     missingInputs: allMissing,
