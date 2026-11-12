@@ -331,9 +331,12 @@ describe("timezone handling", () => {
   it("sets timezone from the runtime environment for manual events", () => {
     const record = ingestFromCalendarEvent(manualEvent);
 
-    expect(record.timezone).toBeTruthy();
-    // Should be a valid IANA timezone string
-    expect(record.timezone).toMatch(/^[A-Za-z]+\/[A-Za-z_]+/);
+    const runtimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    expect(record.timezone).toBe(runtimeZone);
+    // UTC is a valid IANA zone and has no region slash.
+    expect(() => {
+      Intl.DateTimeFormat(undefined, { timeZone: record.timezone });
+    }).not.toThrow();
   });
 
   it("preserves ISO timezone offset in synced event datetimes", () => {
